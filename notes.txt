@@ -127,7 +127,336 @@ k = [[-1,-1,-1],
      [-1, 8,-1],
      [-1,-1,-1]]
 
+--------------------------------------------------------------------------------------------
+
+1. Contrast Stretching
+mn = 255
+mx = 0
+# Find min and max
+for i in range(rows):
+    for j in range(cols):
+        if img[i,j] < mn:
+            mn = int(img[i,j])
+        if img[i,j] > mx:
+            mx = int(img[i,j])
+# Stretching
+for i in range(rows):
+    for j in range(cols):
+        out[i,j] = int((int(img[i,j])-mn)*255/(mx-mn))
 
 
+2.Histogram Equalization
+rows, cols = img.shape
+hist = np.zeros(256, dtype=int)
+
+# Histogram count
+for i in range(rows):
+    for j in range(cols):
+        hist[img[i,j]] += 1
+
+# Cumulative histogram
+cdf = np.zeros(256, dtype=int)
+cdf[0] = hist[0]
+
+for k in range(1,256):
+    cdf[k] = cdf[k-1] + hist[k]
+
+# Find minimum CDF
+cdf_min = 0
+for k in range(256):
+    if cdf[k] != 0:
+        cdf_min = cdf[k]
+        break
+
+# Equalization
+out = img.copy()
+
+for i in range(rows):
+    for j in range(cols):
+        p = int(img[i,j])
+        out[i,j] = int((cdf[p]-cdf_min)*255/(rows*cols-cdf_min))
+
+--------------------------------------------------------------------------------------------
+
+1. Erosion
+img = cv2.imread('morph1.png', 0)
+_, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+rows, cols = img.shape
+out = img.copy()
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        if np.all(img[i-1:i+2, j-1:j+2] == 255):
+            out[i,j] = 255
+        else:
+            out[i,j] = 0
+
+2. Dilation
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+
+        if np.any(img[i-1:i+2, j-1:j+2] == 255):
+            out[i,j] = 255
+        else:
+            out[i,j] = 0
 
 
+3. Boundary Extraction
+rows, cols = img.shape
+eroded = img.copy()
+# Erosion
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        if np.all(img[i-1:i+2, j-1:j+2] == 255):
+            eroded[i,j] = 255
+        else:
+            eroded[i,j] = 0
+# Boundary extraction
+out = img - eroded
+
+
+4. Removing Small Objects
+def count(i, j):
+    c = 0
+    for x in range(-2,3):
+        for y in range(-2,3):
+            if img[i+x,j+y] == 255:
+                c += 1
+    return c
+for i in range(2,rows-2):
+    for j in range(2,cols-2):
+        if img[i,j] == 255 and count(i,j) <= 5:
+            out[i,j] = 0
+
+5. Skeletonization
+def erosion(a):
+    out = np.zeros_like(a)
+    for i in range(1, rows-1):
+        for j in range(1, cols-1):
+            if np.all(a[i-1:i+2, j-1:j+2] == 255):
+                out[i,j] = 255
+    return out
+
+def dilation(a):
+    out = np.zeros_like(a)
+    for i in range(1, rows-1):
+        for j in range(1, cols-1):
+            if np.any(a[i-1:i+2, j-1:j+2] == 255):
+                out[i,j] = 255
+    return out
+
+temp = img.copy()
+skel = np.zeros_like(img)
+while np.any(temp == 255):
+
+    er = erosion(temp)        
+    op = dilation(er)        
+    part = temp - op           
+    skel = np.maximum(skel, part)  
+    temp = er                      
+
+
+--------------------------------------------------------------------------------------------
+1. A. Thresholding
+for i in range(rows):
+    for j in range(cols):
+        if img[i,j] > 127:
+            out[i,j] = 255
+        else:
+            out[i,j] = 0
+
+2. Region Growing
+out = np.zeros_like(img)
+visited = np.zeros_like(img)
+
+sx, sy = rows//2, cols//2
+seed = img[sx, sy]
+
+stack = [(sx, sy)]
+out[sx, sy] = 255
+visited[sx, sy] = 1
+
+while stack:
+    i, j = stack.pop()
+    for x, y in [(i-1,j), (i+1,j), (i,j-1), (i,j+1)]:
+        if 0 <= x < rows and 0 <= y < cols:
+            if visited[x,y] == 0:
+                visited[x,y] = 1
+                if abs(int(img[x,y])-int(seed)) < 20:
+                    out[x,y] = 255
+                    stack.append((x,y))
+
+
+3.Region Splitting
+out = img.copy()
+stack = [(0, 0, rows, cols)]
+while stack:
+    row, col, height, width = stack.pop()
+    region = img[row:row+height, col:col+width]
+    if height > 8 and width > 8 and (int(region.max())-int(region.min())) > 50:
+
+        half_height = height//2
+        half_width = width//2
+        stack.append((row, col, half_height, half_width))                     
+        stack.append((row, col+half_width, half_height, half_width))          
+        stack.append((row+half_height, col, half_height, half_width))             
+        stack.append((row+half_height, col+half_width, half_height, half_width))   
+    else:
+        out[row:row+height, col:col+width] = region.mean()
+
+4. Region Merging
+out = img.copy()
+block_size = 16
+threshold = 25
+
+for row in range(0, rows-block_size, block_size):
+    for col in range(0, cols-block_size, block_size):
+        region = img[row:row+block_size, col:col+block_size]
+        avg = np.mean(region)
+        right = img[row:row+block_size, col+block_size:col+2*block_size]
+        bottom = img[row+block_size:row+2*block_size, col:col+block_size]
+        
+        if right.size > 0 and abs(avg-np.mean(right)) < threshold:
+            out[row:row+block_size, col:col+block_size] = np.mean([avg, np.mean(right)])
+        
+        if bottom.size > 0 and abs(avg-np.mean(bottom)) < threshold:
+            out[row:row+block_size, col:col+block_size] = np.mean([avg, np.mean(bottom)])
+
+
+--------------------------------------------------------------------------------------------
+
+1.RLE
+# RLE Encoding
+data = img.flatten()
+enc = []
+count = 1
+
+for i in range(1, len(data)):
+    if data[i] == data[i-1]:
+        count += 1
+    else:
+        enc.append((data[i-1], count))
+        count = 1
+enc.append((data[-1], count))
+
+# RLE Decoding
+dec = []
+for value, count in enc:
+    dec.extend([value] * count)
+
+out = np.array(dec, dtype=np.uint8).reshape(img.shape)
+original = img.size * 8
+compressed = len(enc) * 40
+print("Compression Ratio:", round(original/compressed, 2))
+print("Compressed Size:", compressed, "bits")
+
+
+2.Symbol Encoding
+# Encoding
+symbols, enc = np.unique(img, return_inverse=True)
+
+# Decoding
+out = symbols[enc].reshape(img.shape).astype(np.uint8)
+
+# Compression
+bits = max(1, math.ceil(math.log2(len(symbols))))
+original = img.size * 8
+compressed = img.size * bits + len(symbols) * 8
+
+print("Compression Ratio:", round(original/compressed, 2))
+print("Compressed Size:", compressed, "bits")
+
+3.Huffman
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+import heapq
+
+img = cv2.imread('hist.jpg', 0)
+data = img.flatten()
+
+# Frequency of each pixel
+values, counts = np.unique(data, return_counts=True)
+
+# Create Huffman tree
+heap = []
+for i in range(len(values)):
+    heap.append((counts[i], i, values[i]))
+
+heapq.heapify(heap)
+k = len(values)
+
+while len(heap) > 1:
+    f1, _, a = heapq.heappop(heap)
+    f2, _, b = heapq.heappop(heap)
+    heapq.heappush(heap, (f1+f2, k, (a,b)))
+    k += 1
+
+tree = heap[0][2]
+
+# Generate codes
+codes = {}
+stack = [(tree, "")]
+
+while stack:
+    node, code = stack.pop()
+
+    if isinstance(node, tuple):
+        stack.append((node[1], code+'1'))
+        stack.append((node[0], code+'0'))
+    else:
+        codes[node] = code if code else '0'
+
+# Encoding
+enc = ''.join(codes[p] for p in data)
+
+# Decoding
+dec = []
+code = ""
+
+for bit in enc:
+    code += bit
+    for value, c in codes.items():
+        if code == c:
+            dec.append(value)
+            code = ""
+            break
+
+out = np.array(dec, dtype=np.uint8).reshape(img.shape)
+
+# Compression
+original = img.size * 8
+compressed = len(enc) + len(values) * 8
+
+print("Compression Ratio:", round(original/compressed, 2))
+print("Compressed Size:", compressed, "bits")
+
+-------------------------------------------------------------------------------------------
+
+YOLO
+
+from ultralytics import YOLO
+import cv2
+import matplotlib.pyplot as plt
+
+img = cv2.imread('object.jpg')
+
+# Load bigger model
+model = YOLO('yolov8m.pt')
+
+# Detect objects with lower confidence
+result = model(img, conf=0.10)
+
+out = result[0].plot()
+
+plt.figure(figsize=(10,10))
+plt.subplot(1,2,1)
+plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+plt.title('Original')
+plt.axis('off')
+
+plt.subplot(1,2,2)
+plt.imshow(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+plt.title('Object Detection')
+plt.axis('off')
+
+plt.show()
