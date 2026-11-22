@@ -1,47 +1,133 @@
+1. Mean filter -----------------------
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-
-img = cv2.imread('hist.jpg', 0)
-
-# RLE Encoding
-data = img.flatten()
-enc = []
-count = 1
-
-for i in range(1, len(data)):
-    if data[i] == data[i-1]:
-        count += 1
-    else:
-        enc.append((data[i-1], count))
-        count = 1
-
-enc.append((data[-1], count))
-
-# RLE Decoding
-dec = []
-
-for value, count in enc:
-    dec.extend([value] * count)
-
-out = np.array(dec, dtype=np.uint8).reshape(img.shape)
-
-# Compression size
-original = img.size * 8
-compressed = len(enc) * 40
-
-print("Compression Ratio:", round(original/compressed, 2))
-print("Compressed Size:", compressed, "bits")
-
-# Display
-plt.subplot(1,2,1)
+img = cv2.imread('noisy.jpg', 0)
+rows, cols = img.shape
+out = img.copy()
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        s = 0
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                s = s + int(img[i+x, j+y])
+        out[i, j] = s // 9
+plt.subplot(1, 2, 1)
 plt.imshow(img, cmap='gray')
-plt.title("Original")
+plt.title('Input Image')
 plt.axis('off')
-
-plt.subplot(1,2,2)
+plt.subplot(1, 2, 2)
 plt.imshow(out, cmap='gray')
-plt.title("RLE Output")
+plt.title('Mean Filter Output')
 plt.axis('off')
-
 plt.show()
+
+
+2. Median Filter  -----------------------
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        a = []
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                a.append(int(img[i+x, j+y]))
+
+        a.sort()            
+        out[i, j] = a[4]    
+
+
+3. Gaussian Filter  -----------------------
+k = [[1,2,1],
+     [2,4,2],
+     [1,2,1]]
+
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        s = 0
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                s += int(img[i+x, j+y]) * k[x+1][y+1]
+        out[i, j] = s // 16
+
+
+4.Min Filter
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        mn = 255
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                if img[i+x, j+y] < mn:
+                    mn = int(img[i+x, j+y])
+        out[i, j] = mn
+
+
+5. Max Filter
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        mx = 0
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                if img[i+x, j+y] > mx:
+                    mx = int(img[i+x, j+y])
+        out[i, j] = mx
+
+--------------------------------------------------------------------------------------------
+
+1. Sobel 
+kx = [[-1,0,1],
+      [-2,0,2],
+      [-1,0,1]]
+ky = [[-1,-2,-1],
+      [ 0, 0, 0],
+      [ 1, 2, 1]]
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        gx = 0
+        gy = 0
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                p = int(img[i+x, j+y])
+                gx += p * kx[x+1][y+1]
+                gy += p * ky[x+1][y+1]
+        outx[i,j] = min(abs(gx), 255)     #sobel x
+        outy[i,j] = min(abs(gy), 255)     #sobel y
+        outc[i,j] = min(abs(gx) + abs(gy), 255)     #sobel x+y
+
+
+2. Prewitt
+kx = [[-1,0,1],
+      [-1,0,1],
+      [-1,0,1]]
+
+ky = [[-1,-1,-1],
+      [ 0, 0, 0],
+      [ 1, 1, 1]]
+
+3. Robert
+kx = [[1,0],
+      [0,-1]]
+
+ky = [[0,1],
+      [-1,0]]
+
+4.Laplacian 4-Neighbour
+k = [[0,-1,0],
+     [-1,4,-1],
+     [0,-1,0]]
+for i in range(1, rows-1):
+    for j in range(1, cols-1):
+        s = 0
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                s += int(img[i+x, j+y]) * k[x+1][y+1]
+        out[i,j] = min(abs(s), 255)
+
+
+5. 4.Laplacian 8-Neighbour
+k = [[-1,-1,-1],
+     [-1, 8,-1],
+     [-1,-1,-1]]
+
+
+
+
+
