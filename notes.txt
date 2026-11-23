@@ -433,21 +433,22 @@ print("Compressed Size:", compressed, "bits")
 -------------------------------------------------------------------------------------------
 
 YOLO
+pip install ultralytics
 
 from ultralytics import YOLO
 import cv2
 import matplotlib.pyplot as plt
 
 img = cv2.imread('object.jpg')
-
-# Load bigger model
 model = YOLO('yolov8m.pt')
+result = model(img, conf=0.10, iou=0.45)
 
-# Detect objects with lower confidence
-result = model(img, conf=0.10)
+for box in result[0].boxes :
+    cls = int(box.cls[0])
+    conf = float(box.conf[0])
+    name = model.names[cls]
 
-out = result[0].plot()
-
+    
 plt.figure(figsize=(10,10))
 plt.subplot(1,2,1)
 plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
